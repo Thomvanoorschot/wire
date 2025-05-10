@@ -231,6 +231,7 @@ pub fn main() !void {
     // Run the event loop to process network events.
     try loop.run();
 }
+```
 
 This server example shows:
 *   Initializing `wire.Server` with an address and an `acceptCallback`.
