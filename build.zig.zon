@@ -1,6 +1,6 @@
 .{
     .name = .wire,
-    .fingerprint = 0x418a0a6d96d4418,
+    .fingerprint = 0xb07b393535daaf90,
     .version = "0.0.1",
     .minimum_zig_version = "0.15.0-dev.45+24db007cd",
     .dependencies = .{
