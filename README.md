@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="wire.png" alt="Project Logo" width="500" />
+</p>
 # Wire: A TCP Networking Library for Zig
 
 ## Overview
