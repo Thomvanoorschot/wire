@@ -43,7 +43,7 @@ pub fn Client(
             allocator: std.mem.Allocator,
             loop: *Loop,
             options: ClientOptions,
-            comptime cbs: CallbacksType,
+            cbs: CallbacksType,
             callback_context: *anyopaque,
         ) !Self {
             var initialized_buffers: ReadBuffersType = undefined;
@@ -192,9 +192,9 @@ pub fn Client(
             const message_type: MessageTypes = @enumFromInt(self.frame_header.messageType());
             inline for (@typeInfo(MessageTypes).@"enum".fields) |field_info| {
                 if (std.mem.eql(u8, @tagName(message_type), field_info.name)) {
-                    const callback_fn = @field(self.callbacks, field_info.name);
+                    const callback = @field(self.callbacks, field_info.name);
                     const buffer_frame = @field(self.read_buffers, field_info.name);
-                    callback_fn(self.callback_context, buffer_frame.payload) catch |err| {
+                    callback.cb(callback.context, buffer_frame.payload) catch |err| {
                         std.log.err("Callback error for message type '{s}': {s}", .{ field_info.name, @errorName(err) });
                     };
                     break;
