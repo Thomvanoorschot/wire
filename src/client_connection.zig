@@ -70,6 +70,7 @@ pub const ClientConnection = struct {
                 r: xev.ReadError!usize,
             ) xev.CallbackAction {
                 const userdata = ud orelse unreachable;
+                errdefer userdata.self.allocator.destroy(userdata);
                 const inner_self = userdata.self;
                 const inner_cb_context = userdata.cb_context;
                 const bytes_read = r catch |err| {
@@ -98,7 +99,6 @@ pub const ClientConnection = struct {
                 if (inner_self.keep_alive) {
                     return .rearm;
                 }
-                // TODO: This isn't destroying it in all cases
                 inner_self.allocator.destroy(userdata);
 
                 return .disarm;
@@ -124,7 +124,7 @@ pub const ClientConnection = struct {
         self: *Self,
         comptime MessageTypes: type,
         message_type: MessageTypes,
-        data: []u8,
+        data: std.ArrayList(u8),
     ) !void {
         const write_context = self.write_contexts.allocator.create(writeContext) catch unreachable;
         write_context.* = .{
@@ -160,9 +160,9 @@ pub const ClientConnection = struct {
 
         for (self.write_contexts.items, 0..) |item, idx| {
             if (&item.req.completion == c) {
-                // TODO: This can be done better
+                self.write_contexts.allocator.free(item.frame);
                 self.write_contexts.allocator.destroy(item);
-                _ = self.write_contexts.orderedRemove(idx);
+                _ = self.write_contexts.swapRemove(idx);
                 break;
             }
         }

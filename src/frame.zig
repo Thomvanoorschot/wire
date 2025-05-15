@@ -9,15 +9,16 @@ pub const Frame = struct {
     pub fn init(
         allocator: std.mem.Allocator,
         msg_type: u8,
-        payload: []u8,
+        payload: std.ArrayList(u8),
     ) ![]u8 {
-        const totalSize = headerSize + payload.len;
+        const totalSize = headerSize + payload.items.len;
 
         var buf = try allocator.alloc(u8, totalSize);
         buf[0] = msg_type;
 
-        std.mem.writeInt(u32, buf[1..headerSize], @intCast(payload.len), .big);
-        @memcpy(buf[headerSize..], payload);
+        std.mem.writeInt(u32, buf[1..headerSize], @intCast(payload.items.len), .big);
+        @memcpy(buf[headerSize..], payload.items);
+        payload.deinit();
         return buf;
     }
 };
