@@ -9,15 +9,21 @@ const Loop = xev.Loop;
 const Server = svr.Server;
 const Frame = frm.Frame;
 
+const QueuedWrite = struct {
+    client_connection: *ClientConnection,
+    req: xev.WriteRequest = undefined,
+    frame: []u8,
+};
+
 pub const ClientConnection = struct {
     allocator: std.mem.Allocator,
     server: *Server,
     socket: TCP,
     read_buffer: [1024]u8 = undefined,
     read_completion: Completion = undefined,
-    write_contexts: std.ArrayList(*writeContext),
     keep_alive: bool = false,
     write_queue: xev.WriteQueue,
+    queued_write_pool: std.heap.MemoryPool(QueuedWrite),
 
     on_close_ctx: *anyopaque = undefined,
     on_close_cb: ?*const fn (
@@ -39,14 +45,14 @@ pub const ClientConnection = struct {
             .allocator = allocator,
             .server = server,
             .socket = socket,
-            .write_contexts = std.ArrayList(*writeContext).init(allocator),
             .write_queue = xev.WriteQueue{},
+            .queued_write_pool = std.heap.MemoryPool(QueuedWrite).init(allocator),
         };
         return self;
     }
 
     pub fn deinit(self: *Self) void {
-        self.write_contexts.deinit();
+        self.queued_write_pool.deinit();
     }
     pub fn read(
         self: *Self,
@@ -116,18 +122,15 @@ pub const ClientConnection = struct {
         );
     }
 
-    const writeContext = struct {
-        req: xev.WriteRequest = undefined,
-        frame: []u8,
-    };
     pub fn write(
         self: *Self,
         comptime MessageTypes: type,
         message_type: MessageTypes,
         data: std.ArrayList(u8),
     ) !void {
-        const write_context = self.write_contexts.allocator.create(writeContext) catch unreachable;
-        write_context.* = .{
+        const queued_payload: *QueuedWrite = try self.queued_write_pool.create();
+        queued_payload.* = .{
+            .client_connection = self,
             .frame = try Frame.init(
                 self.allocator,
                 @intFromEnum(message_type),
@@ -135,37 +138,30 @@ pub const ClientConnection = struct {
             ),
         };
 
-        self.write_contexts.append(write_context) catch unreachable;
-
         self.socket.queueWrite(
             self.server.loop,
             &self.write_queue,
-            &write_context.req,
-            .{ .slice = write_context.frame },
-            Self,
-            self,
+            &queued_payload.req,
+            .{ .slice = queued_payload.frame },
+            QueuedWrite,
+            queued_payload,
             internalWriteCallback,
         );
     }
 
     fn internalWriteCallback(
-        self_: ?*Self,
+        write_payload_: ?*QueuedWrite,
         _: *Loop,
-        c: *Completion,
+        _: *Completion,
         _: TCP,
         _: xev.WriteBuffer,
         r: xev.WriteError!usize,
     ) xev.CallbackAction {
-        const self = self_ orelse unreachable;
+        const write_payload = write_payload_ orelse unreachable;
+        const self = write_payload.client_connection;
+        defer self.queued_write_pool.destroy(write_payload);
+        defer self.allocator.free(write_payload.frame);
 
-        for (self.write_contexts.items, 0..) |item, idx| {
-            if (&item.req.completion == c) {
-                self.write_contexts.allocator.free(item.frame);
-                self.write_contexts.allocator.destroy(item);
-                _ = self.write_contexts.swapRemove(idx);
-                break;
-            }
-        }
         _ = r catch |err| {
             self.close(err);
             return .disarm;
