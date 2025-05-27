@@ -71,10 +71,15 @@ fn handleMyMessageA(context: ?*anyopaque, payload: []const u8) anyerror!void {
     _ = context; // Avoid unused variable warning if context is not used
 }
 
-fn handleMyMessageB(context: ?*anyopaque, payload: []const u8) anyerror!void {
-    // Process payload for myMessageB
-    std.debug.print("Received myMessageB: {s}\n", .{payload});
-    _ = context;
+const MyCustomStruct = struct {
+    const Self = @This();
+
+    fn handleMyMessageB(context: ?*anyopaque, payload: []const u8) anyerror!void {
+        // Process payload for myMessageB
+        const self = @as(*Self, @ptrCast(@alignCast(context)));
+        std.debug.print("Received myMessageB: {s}\n", .{payload});
+        _ = context;
+    }
 }
 
 pub fn main() !void {
@@ -94,10 +99,15 @@ pub fn main() !void {
             // .keep_alive = false, // Optional: defaults to false
         },
         .{ // Callbacks for each MessageType
-            .myMessageA = handleMyMessageA,
-            .myMessageB = handleMyMessageB,
+            .myMessageA = .{
+                .context = null,
+                .cb = handleMyMessageA
+            },
+            .myMessageB = .{
+                .context = @ptrCast(),
+                .cb = handleMyMessageB
+            },
         },
-        null, // Optional context pointer to be passed to callbacks
     );
 
     // 4. Connect to the server.
