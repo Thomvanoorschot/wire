@@ -82,6 +82,8 @@ const MyCustomStruct = struct {
     }
 }
 
+var customStruct = MyCustomStruct{};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -90,6 +92,7 @@ pub fn main() !void {
     var loop = try xev.Loop.init(.{});
     defer loop.deinit();
 
+    
     // 3. Initialize the Client.
     var client = try wire.Client(MessageTypes).init(
         allocator,
@@ -104,7 +107,7 @@ pub fn main() !void {
                 .cb = handleMyMessageA
             },
             .myMessageB = .{
-                .context = @ptrCast(),
+                .context = @ptrCast(&customStruct),
                 .cb = handleMyMessageB
             },
         },
